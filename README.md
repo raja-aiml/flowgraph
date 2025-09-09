@@ -77,69 +77,92 @@ FlowGraph follows Clean Architecture principles with clear layer separation:
 ### Architecture Diagram
 
 ```mermaid
-graph TB
-    subgraph "External Layer"
-        CLI[CLI Tools]
-        API[REST/gRPC API]
-        WEB[Web UI]
-    end
-    
-    subgraph "Framework & Drivers"
-        DB[(PostgreSQL/SQLite)]
-        MQ[Message Queue]
-        METRICS[Metrics System]
-    end
-    
-    subgraph "Interface Adapters"
-        REPO[Repository Implementations]
-        HTTP[HTTP Handlers]
-        GRPC[gRPC Services]
-    end
-    
-    subgraph "Application Layer"
-        UC[Use Cases]
-        SVC[Services]
-        DTO[DTOs]
-    end
-    
-    subgraph "Domain Layer"
-        GRAPH[Graph Entities]
-        PREGEL[Pregel Engine]
-        CHANNEL[Channel System]
-        CHECKPOINT[Checkpoint System]
-    end
-    
-    CLI --> API
-    API --> HTTP
-    API --> GRPC
-    WEB --> API
-    
-    HTTP --> UC
-    GRPC --> UC
-    UC --> SVC
-    SVC --> DTO
-    
-    UC --> GRAPH
-    UC --> PREGEL
-    UC --> CHANNEL
-    UC --> CHECKPOINT
-    
-    SVC --> REPO
-    REPO --> DB
-    
-    METRICS --> UC
-    MQ --> CHANNEL
-    
-    style GRAPH fill:#e1f5fe
-    style PREGEL fill:#e1f5fe
-    style CHANNEL fill:#e1f5fe
-    style CHECKPOINT fill:#e1f5fe
-    style UC fill:#fff3e0
-    style SVC fill:#fff3e0
-    style DTO fill:#fff3e0
-    style REPO fill:#f3e5f5
-    style HTTP fill:#f3e5f5
-    style GRPC fill:#f3e5f5
+graph LR
+  %% Classes for consistent styling
+  classDef domain fill:#e1f5fe,stroke:#2c3e50,stroke-width:1px
+  classDef app fill:#fff3e0,stroke:#2c3e50,stroke-width:1px
+  classDef adapter fill:#f3e5f5,stroke:#2c3e50,stroke-width:1px
+  classDef driver fill:#e8f5e9,stroke:#2c3e50,stroke-width:1px
+  classDef external fill:#e3f2fd,stroke:#2c3e50,stroke-width:1px
+  classDef planned fill:#f9fbfd,stroke:#2c3e50,stroke-dasharray: 5 3
+  classDef optional fill:#f9fbfd,stroke:#9e9e9e,stroke-dasharray: 5 3,color:#616161
+
+  %% External
+  subgraph EXT["External Layer"]
+    direction LR
+    CLI[CLI Tools]
+    API[API Gateway]
+    WEB[Web UI]
+  end
+  class CLI,API,WEB external
+  class API,WEB planned
+
+  %% Interface Adapters
+  subgraph ADP["Interface Adapters"]
+    direction LR
+    HTTP[HTTP Handlers]
+    GRPC[gRPC Services]
+    REPO[Graph Repository]
+  end
+  class HTTP,GRPC,REPO adapter
+  class GRPC planned
+
+  %% Application Layer
+  subgraph APP["Application Layer"]
+    direction TB
+    UC[Use Cases]
+    SVC[Services: State, Checkpoint, Branch, Interrupt]
+    RUNTIME[Executor/Runtime]
+    DTO[DTOs]
+  end
+  class UC,SVC,RUNTIME,DTO app
+
+  %% Domain Layer
+  subgraph DOM["Domain Layer"]
+    direction TB
+    GRAPH[Graph Entities]
+    PREGEL[Pregel Engine]
+    CHANNEL[Channel System]
+    CHECKPOINT[Checkpoint Model]
+  end
+  class GRAPH,PREGEL,CHANNEL,CHECKPOINT domain
+
+  %% Framework & Drivers
+  subgraph DRV["Framework & Drivers"]
+    direction LR
+    DB[(PostgreSQL/SQLite/Memory)]
+    FS[(Filesystem)]
+    MQ[Message Queue]
+    METRICS[Metrics]
+  end
+  class DB,FS,MQ,METRICS driver
+  class MQ optional
+
+  %% Control flow
+  CLI -->|local exec| RUNTIME
+  API -->|REST| HTTP
+  API -->|gRPC| GRPC
+  WEB -->|HTTP| API
+
+  HTTP --> UC
+  GRPC --> UC
+  UC --> SVC
+  SVC --> RUNTIME
+  RUNTIME --> GRAPH
+  RUNTIME --> PREGEL
+  RUNTIME --> CHANNEL
+  RUNTIME --> CHECKPOINT
+
+  %% Persistence / drivers (dashed)
+  REPO -.->|persist graphs| DB
+  SVC -.->|save/load checkpoints| DB
+  CHANNEL -.->|persistent channel| FS
+
+  %% Observability / events (dotted/dashed)
+  RUNTIME -.->|events| METRICS
+  PREGEL -.->|supersteps| METRICS
+  CHANNEL -.->|io stats| METRICS
+  MQ -.->|optional events| CHANNEL
 ```
 
 ### Layer Responsibilities
