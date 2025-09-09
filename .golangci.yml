@@ -1,0 +1,46 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters-settings:
+  gocyclo:
+    min-complexity: 10
+  funlen:
+    lines: 50
+    statements: 35
+  gocognit:
+    min-complexity: 15
+  dupl:
+    threshold: 150
+  errcheck:
+    check-type-assertions: true
+  govet:
+    enable-all: true
+  predeclared:
+    # Warn when re-using predeclared identifiers (like min/max)
+    disabled: false
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - gosimple
+    - staticcheck
+    - ineffassign
+    - typecheck
+    - unused
+    - gocyclo
+    - gocognit
+    - funlen
+    - predeclared
+    - dupl
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - funlen
+        - gocyclo
+        - gocognit
+        - dupl

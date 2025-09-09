@@ -1,0 +1,151 @@
+# FlowGraph - Go Project .gitignore
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+coverage.html
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Build artifacts
+/bin/
+/build/
+/dist/
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.cover
+*.nyc_output
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Development tools
+.air.toml
+air_tmp/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Config files with secrets
+config/local.*
+config/dev.*
+config/prod.*
+
+# Docker
+docker-compose.override.yml
+
+# Benchmarks
+*.prof
+*.pprof
+bench.txt
+
+# Generated files
+*.pb.go
+*_generated.go
+
+# Kubernetes
+*.yaml.tmp
+*.yml.tmp
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Application specific
+flowgraph.exe
+
+# Test artifacts
+testdata/output/
+*.golden
+
+# Documentation
+docs/site/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+
+# Performance profiling
+cpu.prof
+mem.prof
+profile.out
+
+# Task Master
+.taskmaster/reports/
+.taskmaster/state.json
+
+# Editor directories and files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+.gocache
+
