@@ -1,43 +1,57 @@
 package main
 
 import (
-    "context"
-    "fmt"
+	"context"
+	"fmt"
+	"math/rand"
+	"time"
 
-    pregel "github.com/flowgraph/flowgraph/internal/core/pregel"
+	pregel "github.com/flowgraph/flowgraph/internal/core/pregel"
 )
 
-// simpleVertex halts immediately; used to demonstrate parallelism config and stats.
-type simpleVertex struct{}
+// workerVertex simulates a distributed computation node
+type workerVertex struct{}
 
-func (s *simpleVertex) Compute(vertexID string, state map[string]interface{}, messages []*pregel.Message) (map[string]interface{}, []*pregel.Message, bool, error) {
-    return state, nil, true, nil
+func (w *workerVertex) Compute(vertexID string, state map[string]interface{}, messages []*pregel.Message) (map[string]interface{}, []*pregel.Message, bool, error) {
+	// Simulate computation
+	result := rand.Intn(1000)
+	state["result"] = result
+	time.Sleep(time.Millisecond * time.Duration(rand.Intn(50))) // Simulate work
+	return state, nil, true, nil
 }
 
 func main() {
-    // Single vertex program; real graphs would have many vertices.
-    vertices := map[string]pregel.VertexProgram{
-        "A": &simpleVertex{},
-    }
-    initial := map[string]map[string]interface{}{
-        "A": {},
-    }
+	fmt.Println("🖥️ Distributed Computation (FlowGraph Real-World Example)")
+	fmt.Println("======================================================")
 
-    // Use CPU-scaled parallelism for high throughput
-    cfg := pregel.Config{
-        MaxSupersteps:      1,
-        ParallelismFactor:  1.5, // 1.5x NumCPU workers when Parallelism is unset
-    }
+	// Multiple worker nodes
+	vertices := map[string]pregel.VertexProgram{}
+	initial := map[string]map[string]interface{}{}
+	for i := 1; i <= 8; i++ {
+		id := fmt.Sprintf("worker-%d", i)
+		vertices[id] = &workerVertex{}
+		initial[id] = map[string]interface{}{}
+	}
 
-    engine := pregel.NewEngine(vertices, initial, cfg)
-    stats := engine.Stats()
-    fmt.Printf("Workers: %d, Queued: %d, Active: %d, Halted: %v\n", stats.Workers, stats.QueuesQueued, stats.ActiveCount, stats.Halted)
+	// Parallel execution config
+	cfg := pregel.Config{
+		MaxSupersteps:     2,
+		ParallelismFactor: 2.0, // 2x NumCPU workers
+	}
 
-    // Run the engine
-    _ = engine.Run(context.Background())
+	engine := pregel.NewEngine(vertices, initial, cfg)
+	fmt.Printf("Starting distributed computation with %d workers...\n", len(vertices))
 
-    // Print stats after completion
-    stats = engine.Stats()
-    fmt.Printf("After run — Workers: %d, Queued: %d, Active: %d, Halted: %v\n", stats.Workers, stats.QueuesQueued, stats.ActiveCount, stats.Halted)
+	// Run the engine
+	_ = engine.Run(context.Background())
+
+	// Aggregate results
+	results := make([]int, 0, len(vertices))
+	for id, state := range initial {
+		if v, ok := state["result"].(int); ok {
+			results = append(results, v)
+			fmt.Printf("Worker %s result: %d\n", id, v)
+		}
+	}
+	fmt.Printf("\n✅ Computation complete. Aggregated results: %v\n", results)
 }
-

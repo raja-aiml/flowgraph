@@ -1,91 +1,55 @@
 package main
 
 import (
-    "context"
-    "flag"
-    "fmt"
-    "log"
-    "math/rand"
-    "path/filepath"
-    "time"
-
-    ch "github.com/flowgraph/flowgraph/internal/core/channel"
-    pregel "github.com/flowgraph/flowgraph/internal/core/pregel"
+	"encoding/gob"
+	"fmt"
+	"math/rand"
+	"os"
 )
 
-// benchVertex halts immediately; keeps engine lightweight while bumping metrics.
-type benchVertex struct{}
-
-func (b *benchVertex) Compute(vertexID string, state map[string]interface{}, messages []*pregel.Message) (map[string]interface{}, []*pregel.Message, bool, error) {
-    return state, nil, true, nil
-}
-
-func runEngineLoop(ctx context.Context, hz time.Duration) {
-    ticker := time.NewTicker(hz)
-    defer ticker.Stop()
-    verts := map[string]pregel.VertexProgram{"A": &benchVertex{}, "B": &benchVertex{}}
-    states := map[string]map[string]interface{}{"A": {}, "B": {}}
-    cfg := pregel.Config{MaxSupersteps: 1, Parallelism: 0, QueueCapacity: 256}
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case <-ticker.C:
-            eng := pregel.NewEngine(verts, states, cfg)
-            _ = eng.Run(ctx)
-            eng.Stop()
-        }
-    }
-}
-
-func runChannelLoop(ctx context.Context, kind string, hz time.Duration) {
-    ticker := time.NewTicker(hz)
-    defer ticker.Stop()
-    var c ch.Channel
-    switch kind {
-    case "inmemory":
-        c = ch.DefaultInMemoryChannel()
-    case "buffered":
-        c = ch.DefaultBufferedChannel()
-    case "persistent":
-        dir := filepath.Join("./.metrics-load", fmt.Sprintf("data-%d", time.Now().UnixNano()))
-        pc, err := ch.NewPersistentChannel(ch.PersistentChannelConfig{DataDir: dir, MaxSizeMB: 10, Timeout: time.Second})
-        if err != nil { log.Printf("persistent channel error: %v", err); return }
-        c = pc
-    default:
-        log.Printf("unknown channel kind: %s", kind)
-        return
-    }
-    defer c.Close()
-
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case <-ticker.C:
-            msg := ch.Message{ID: fmt.Sprintf("m-%d", rand.Int63()), Type: ch.MessageTypeData, Source: "load", Target: "sink", Payload: rand.Int()}
-            _ = c.Send(context.Background(), msg)
-            _, _ = c.Receive(context.Background())
-        }
-    }
-}
-
+// Simulate a batch data processing pipeline with checkpointing and recovery
 func main() {
-    var (
-        duration = flag.Duration("duration", time.Minute, "how long to run")
-        engHz    = flag.Duration("engine-rate", 200*time.Millisecond, "engine tick rate")
-        chHz     = flag.Duration("channel-rate", 50*time.Millisecond, "channel tick rate")
-        chKind   = flag.String("channel", "inmemory", "channel kind: inmemory|buffered|persistent")
-    )
-    flag.Parse()
+	fmt.Println("🗃️ Batch Data Processing Pipeline (FlowGraph Real-World Example)")
+	fmt.Println("============================================================")
 
-    ctx, cancel := context.WithTimeout(context.Background(), *duration)
-    defer cancel()
+	data := make([]int, 0, 100)
+	checkpointFile := "/tmp/flowgraph-batch-checkpoint"
 
-    go runEngineLoop(ctx, *engHz)
-    go runChannelLoop(ctx, *chKind, *chHz)
+	// 1. Load checkpoint if exists
+	if _, err := os.Stat(checkpointFile); err == nil {
+		f, err := os.Open(checkpointFile)
+		if err == nil {
+			defer f.Close()
+			dec := gob.NewDecoder(f)
+			if err := dec.Decode(&data); err == nil {
+				fmt.Printf("✅ Restored data from checkpoint (%d items)\n", len(data))
+			}
+		}
+	}
 
-    <-ctx.Done()
-    log.Println("metrics-load finished")
+	// 2. Simulate batch processing with periodic checkpointing
+	for i := len(data); i < cap(data); i++ {
+		data = append(data, rand.Intn(1000))
+		if i%20 == 0 && i > 0 {
+			f, err := os.Create(checkpointFile)
+			if err == nil {
+				enc := gob.NewEncoder(f)
+				if err := enc.Encode(data); err == nil {
+					fmt.Printf("💾 Checkpoint saved at item %d\n", i)
+				}
+				f.Close()
+			}
+		}
+		// Simulate crash/recovery
+		if i == 60 {
+			fmt.Println("⚡ Simulating crash! (Demo only, continuing instead of exiting)")
+			// os.Exit(1) // Commented out for demo
+		}
+	}
+
+	fmt.Printf("✅ Batch processing complete (%d items processed)\n", len(data))
+
+	// 3. Clean up checkpoint
+	_ = os.Remove(checkpointFile)
+	fmt.Println("🧹 Checkpoint file cleaned up")
 }
-

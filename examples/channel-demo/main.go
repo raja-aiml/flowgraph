@@ -1,169 +1,82 @@
-// Example demonstrating channel implementations
 package main
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/flowgraph/flowgraph/internal/core/channel"
 )
 
+// Simulate a distributed notification system with multiple agents
 func main() {
 	ctx := context.Background()
+	fmt.Println("📢 Distributed Notification System (FlowGraph Real-World Example)")
+	fmt.Println("==============================================================")
 
-	// Test InMemoryChannel
-	fmt.Println("=== Testing InMemoryChannel ===")
-	testInMemoryChannel(ctx)
-
-	// Test BufferedChannel
-	fmt.Println("\n=== Testing BufferedChannel ===")
-	testBufferedChannel(ctx)
-
-	// Test PersistentChannel
-	fmt.Println("\n=== Testing PersistentChannel ===")
-	testPersistentChannel(ctx)
-
-	// Test State Reducers
-	fmt.Println("\n=== Testing State Reducers ===")
-	testStateReducers()
-}
-
-func testInMemoryChannel(ctx context.Context) {
-	ch := channel.DefaultInMemoryChannel()
-	defer ch.Close()
-
-	msg := channel.Message{
-		ID:      "test-1",
-		Type:    channel.MessageTypeData,
-		Source:  "sender",
-		Target:  "receiver",
-		Payload: "Hello from InMemoryChannel!",
-	}
-
-	// Send message
-	if err := ch.Send(ctx, msg); err != nil {
-		log.Printf("Send error: %v", err)
-		return
-	}
-	fmt.Println("✓ Message sent successfully")
-
-	// Receive message
-	received, err := ch.Receive(ctx)
+	// 1. Create channels for notifications
+	inMemCh := channel.DefaultInMemoryChannel()
+	bufCh := channel.NewBufferedChannel(channel.BufferedChannelConfig{MaxSize: 10, Timeout: 3 * time.Second})
+	persistCh, err := channel.NewPersistentChannel(channel.PersistentChannelConfig{DataDir: "/tmp/flowgraph-notify", MaxSizeMB: 2, Timeout: 3 * time.Second})
 	if err != nil {
-		log.Printf("Receive error: %v", err)
-		return
+		log.Fatalf("Failed to create persistent channel: %v", err)
 	}
-	fmt.Printf("✓ Message received: %s\n", received.Payload)
-}
+	defer inMemCh.Close()
+	defer bufCh.Close()
+	defer persistCh.Close()
 
-func testBufferedChannel(ctx context.Context) {
-	ch := channel.NewBufferedChannel(channel.BufferedChannelConfig{
-		MaxSize: 5,
-		Timeout: 5 * time.Second,
-	})
-	defer ch.Close()
-
-	msg := channel.Message{
-		ID:      "test-2",
-		Type:    channel.MessageTypeData,
-		Source:  "sender",
-		Target:  "receiver",
-		Payload: "Hello from BufferedChannel!",
-	}
-
-	// Send message
-	if err := ch.Send(ctx, msg); err != nil {
-		log.Printf("Send error: %v", err)
-		return
-	}
-	fmt.Println("✓ Message sent to buffer")
-
-	// Receive message
-	received, err := ch.Receive(ctx)
-	if err != nil {
-		log.Printf("Receive error: %v", err)
-		return
-	}
-	fmt.Printf("✓ Message received from buffer: %s\n", received.Payload)
-}
-
-func testPersistentChannel(ctx context.Context) {
-	tmpDir := "/tmp/flowgraph-channel-test"
-
-	ch, err := channel.NewPersistentChannel(channel.PersistentChannelConfig{
-		DataDir:   tmpDir,
-		MaxSizeMB: 1, // 1MB
-		Timeout:   5 * time.Second,
-	})
-	if err != nil {
-		log.Printf("Channel creation error: %v", err)
-		return
-	}
-	defer ch.Close()
-
-	msg := channel.Message{
-		ID:      "test-3",
-		Type:    channel.MessageTypeData,
-		Source:  "sender",
-		Target:  "receiver",
-		Payload: "Hello from PersistentChannel!",
+	// 2. Simulate agents sending notifications
+	agents := []string{"agent-A", "agent-B", "agent-C"}
+	for _, agent := range agents {
+		msg := channel.Message{
+			ID:      fmt.Sprintf("msg-%d", rand.Intn(10000)),
+			Type:    channel.MessageTypeData,
+			Source:  agent,
+			Target:  "all",
+			Payload: fmt.Sprintf("Alert from %s at %s", agent, time.Now().Format(time.RFC3339)),
+		}
+		// Send to all channels
+		_ = inMemCh.Send(ctx, msg)
+		_ = bufCh.Send(ctx, msg)
+		_ = persistCh.Send(ctx, msg)
+		fmt.Printf("✓ %s sent notification\n", agent)
 	}
 
-	// Send message
-	if err := ch.Send(ctx, msg); err != nil {
-		log.Printf("Send error: %v", err)
-		return
-	}
-	fmt.Println("✓ Message persisted to disk")
+	// 3. Simulate receiving notifications
+	fmt.Println("\n🔔 Receiving notifications from channels:")
+	receiveAndPrint(ctx, "InMemoryChannel", inMemCh)
+	receiveAndPrint(ctx, "BufferedChannel", bufCh)
+	receiveAndPrint(ctx, "PersistentChannel", persistCh)
 
-	// Receive message
-	received, err := ch.Receive(ctx)
-	if err != nil {
-		log.Printf("Receive error: %v", err)
-		return
-	}
-	fmt.Printf("✓ Message read from disk: %s\n", received.Payload)
-}
-
-func testStateReducers() {
-	// Test AppendReducer
+	// 4. Aggregate notifications using reducers
+	fmt.Println("\n📊 Aggregating notifications with reducers:")
 	appendReducer := channel.NewAppendReducer()
-	current := map[string]interface{}{
-		"items": []interface{}{"a", "b"},
+	current := map[string]interface{}{"alerts": []interface{}{"init"}}
+	for _, agent := range agents {
+		update := map[string]interface{}{"alerts": []interface{}{fmt.Sprintf("alert-from-%s", agent)}}
+		current = appendReducer.Reduce(current, update)
 	}
-	update := map[string]interface{}{
-		"items": []interface{}{"c", "d"},
-	}
-	result := appendReducer.Reduce(current, update)
-	fmt.Printf("✓ AppendReducer result: %v\n", result["items"])
+	fmt.Printf("✓ Aggregated alerts: %v\n", current["alerts"])
 
-	// Test MergeReducer
-	mergeReducer := channel.NewMergeReducer()
-	current = map[string]interface{}{
-		"config": map[string]interface{}{
-			"timeout": 30,
-			"retries": 3,
-		},
+	// 5. Simulate error handling (message loss)
+	fmt.Println("\n⚠️ Simulating message loss:")
+	lostMsg := channel.Message{ID: "lost-1", Type: channel.MessageTypeData, Source: "agent-X", Target: "all", Payload: "Lost alert"}
+	if err := inMemCh.Send(ctx, lostMsg); err != nil {
+		fmt.Printf("❌ Failed to send lost message: %v\n", err)
+	} else {
+		// Simulate loss by not receiving
+		fmt.Println("(Message sent but not received)")
 	}
-	update = map[string]interface{}{
-		"config": map[string]interface{}{
-			"timeout": 60,
-			"debug":   true,
-		},
-	}
-	result = mergeReducer.Reduce(current, update)
-	fmt.Printf("✓ MergeReducer result: %v\n", result["config"])
+}
 
-	// Test ReplaceReducer
-	replaceReducer := channel.NewReplaceReducer()
-	current = map[string]interface{}{
-		"value": "old",
+func receiveAndPrint(ctx context.Context, chName string, ch channel.Channel) {
+	for {
+		msg, err := ch.Receive(ctx)
+		if err != nil {
+			break
+		}
+		fmt.Printf("[%s] Received: %s from %s\n", chName, msg.Payload, msg.Source)
 	}
-	update = map[string]interface{}{
-		"value": "new",
-	}
-	result = replaceReducer.Reduce(current, update)
-	fmt.Printf("✓ ReplaceReducer result: %v\n", result["value"])
 }
