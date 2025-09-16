@@ -1,0 +1,5 @@
+# Add to .gitignore
+.env
+bin/
+*.log
+.DS_Store
